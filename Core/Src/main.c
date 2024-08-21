@@ -462,14 +462,14 @@ int main(void)
 
       case UCUS_BASLADI :
     	  timer=HAL_GetTick();
-
+    	  SUSTAINER=KADEMEAYRILDIMI;
 
 
 		  break;
 
       case KADEMEAYRILDIMI :
 
-    	  if( (magnetic_switch ==0 && (HAL_GetTick()-timer)>=4500) && flag_rampa_altitude ==1  )
+    	  if( ( (magnetic_switch ==0 && (HAL_GetTick()-timer)>=4500) && flag_rampa_altitude ==1) || ((HAL_GetTick()-timer)==6500) )
     	  {
     		  flag_kontrol_5x++;
     	  }
@@ -499,11 +499,11 @@ int main(void)
 		  }
     	  if(flag_kontrol_5x >=5)
     	  {
-		    SUSTAINER=SUSTAINER_ANA;
 
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
 			flag_kontrol_5x=0;
 			//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_4);
+			SUSTAINER=SUSTAINER_ANA;
     	  }
 
 
