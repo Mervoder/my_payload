@@ -35,34 +35,34 @@ $(wildcard ../makefile.init) \
 $(wildcard ../makefile.targets) \
 
 
-BUILD_ARTIFACT_NAME := my_sustainer
+BUILD_ARTIFACT_NAME := my_payload
 BUILD_ARTIFACT_EXTENSION := elf
 BUILD_ARTIFACT_PREFIX :=
 BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
-my_sustainer.elf \
+my_payload.elf \
 
 MAP_FILES += \
-my_sustainer.map \
+my_payload.map \
 
 SIZE_OUTPUT += \
 default.size.stdout \
 
 OBJDUMP_LIST += \
-my_sustainer.list \
+my_payload.list \
 
 
 # All Target
 all: main-build
 
 # Main-build Target
-main-build: my_sustainer.elf secondary-outputs
+main-build: my_payload.elf secondary-outputs
 
 # Tool invocations
-my_sustainer.elf my_sustainer.map: $(OBJS) $(USER_OBJS) C:\Users\oguzk\STM32CubeIDE\workspace_1.15.1\my_sustainer\STM32F446RCTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "my_sustainer.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\oguzk\STM32CubeIDE\workspace_1.15.1\my_sustainer\STM32F446RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="my_sustainer.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+my_payload.elf my_payload.map: $(OBJS) $(USER_OBJS) C:\Users\oguzk\STM32CubeIDE\workspace_1.15.1\my_payload\STM32F446RCTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "my_payload.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\oguzk\STM32CubeIDE\workspace_1.15.1\my_payload\STM32F446RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="my_payload.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -71,14 +71,14 @@ default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-my_sustainer.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "my_sustainer.list"
+my_payload.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "my_payload.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) default.size.stdout my_sustainer.elf my_sustainer.list my_sustainer.map
+	-$(RM) default.size.stdout my_payload.elf my_payload.list my_payload.map
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)

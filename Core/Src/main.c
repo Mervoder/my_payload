@@ -37,7 +37,7 @@
 #define LORA_TX_BUFFER_SIZE 75
 #define EGU_RX_BUFFER_SIZE 34
 #define RX_BUFFER_SIZE 128
-#define DEVICE_ID 2
+#define DEVICE_ID 3
 
 #define GyroAlfa	0.2 //0.01
 #define AccAlfa		0.4 // 0.1
@@ -45,6 +45,7 @@
 #define LP_alpha 	0.55f // 0.4 en iyi
 #define beta		0.85
 
+#define HEADER 		0x33
 
 #define CMD_SET_REG 0xC0 // COMMAND FOR SETTING REGISTER
 #define CMD_READ_REG 0xC1 // COMMAND FOR READING REGISTER
@@ -108,13 +109,14 @@ uint8_t flag_lora ,
 		flag_rampa_altitude,
 		flag_flash,
 		flag_flash_200ms,
-		flag_kontrol_5x;
+		flag_kontrol_5x,
+		flag_page;
 
 const uint8_t EGU_durum_sorgusu[5]={0x54,0x52,0x35,0x0D,0x0A};
 const uint8_t EGU_motor_atesleme[5]={0x54,0x52,0x32,0x0D,0x0A};
 
 
-uint8_t magnetic_switch , button_state;
+uint8_t magnetic_switch , button_state , battery;
 
 uint8_t flash_altitude[1024]={0},
 		flash_accX[1024]={0},
@@ -123,6 +125,8 @@ uint8_t flash_altitude[1024]={0},
 		flash_gyroX[1024]={0},
 		flash_gyroY[1024]={0},
 		flash_gyroZ[1024]={0};
+
+uint8_t page=0;
 
 float real_pitch, real_roll , toplam_pitch,toplam_roll , toplam_accX , toplam_accY , toplam_accZ, toplam_gX,toplam_gY,toplam_gZ , rampa_accel,
 toplam_normal,real_normal, x_max;
@@ -167,6 +171,7 @@ void imu_filter_calculate();
 void union_converter();
 void EGU_Buff_Load(void);
 void Flash_buff_fill();
+void Flash_Write_all();
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
@@ -270,10 +275,10 @@ int main(void)
   HAL_Delay(100);
   receive_data =E220_write_register(0x7, 0x00);
   HAL_Delay(100);
-  receive_data =E220_write_register(0, 0x02); // h 0x06
+  receive_data =E220_write_register(0, 0x12); // h 0x06
   HAL_Delay(100);
 
-  receive_data =E220_write_register(0x1, 0x03); // low 0x03
+  receive_data =E220_write_register(0x1, 0x05); // low 0x03
   HAL_Delay(200);
 
   receive_data = E220_read_register(0);
@@ -319,7 +324,8 @@ int main(void)
   Lora_Tx_Buffer[1]=0x03; // 2A
   Lora_Tx_Buffer[2]=0x10; // 10
   Lora_Tx_Buffer[3]=DEVICE_ID;
-  Lora_Tx_Buffer[50]=0x31;// v4mod
+  Lora_Tx_Buffer[4]= HEADER;
+  Lora_Tx_Buffer[50]=HEADER;// v4mod
   Lora_Tx_Buffer[74]='\n';
 
  // Buzzer_PlayStartSound();
@@ -391,28 +397,19 @@ int main(void)
 	  }
 
 /*************************************************************************************/
-	  if((gps.seconds %4) ==2 && flag_lora ==1)
+	  if((gps.seconds %11) ==0 && flag_lora ==1)
 	  {
 		 // HAL_GPIO_TogglePin(GPIOC,GPIO_PIN_4);
 		  time = HAL_GetTick();
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, SET);
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, RESET);
 		  union_converter();
-		  EGU_Buff_Load();
-		 // HAL_UART_Transmit(&huart3, Lora_Tx_Buffer, LORA_TX_BUFFER_SIZE, HAL_MAX_DELAY);
-		 // HAL_UART_Transmit_IT(&huart3, Lora_Tx_Buffer, LORA_TX_BUFFER_SIZE);
 		  HAL_UART_Transmit_DMA(&huart3, Lora_Tx_Buffer, LORA_TX_BUFFER_SIZE);
 		  flag_lora=0;
 	  }
 
 /*************************************************************************************/
 
-		if(flag_megu==1)
-		{
-
-			HAL_UART_Transmit(&huart6, EGU_durum_sorgusu, 5, 1000);
-			flag_megu=0;
-		}
 
 
 /*************************************************************************************/
@@ -430,8 +427,10 @@ int main(void)
 		  // 8.4V = 2476 adc val 1,99V 0,58V
 		 adc_pil_val=(float)( ( ( (adc/4095)*3.3)-1.41) / (1.99-1.41) ) *100 ; // pil conv
 		 // adc_pil_val = (adc-1755)/(2746-1755)*100;
+		 battery = adc_pil_val;
 		 flag_adc_cnt =0;
 		 flag_adc=0;
+		 HAL_ADC_Start_IT(&hadc1);
 	  }
 
 /*************************************************************************************/
@@ -442,95 +441,20 @@ int main(void)
 /*************************************************************************************/
       if(altitude_kalman > 100 ) flag_rampa_altitude =1;
 
-      switch(SUSTAINER)
-	{
-      case RAMPA :
 
-    	  if(rampa_accel >10 && flag_new_imu_data ==1)
-    	  {
-    		  flag_new_imu_data =0;
-    		  flag_kontrol_5x++;
-    	  }
-
-    	  if(flag_kontrol_5x >=5)
-    	  {
-    		  flag_kontrol_5x =0;
-    		  SUSTAINER=UCUS_BASLADI;
-    	  }
-
-    	  break;
-
-      case UCUS_BASLADI :
-    	  timer=HAL_GetTick();
-    	  SUSTAINER=KADEMEAYRILDIMI;
-
-
-		  break;
-
-      case KADEMEAYRILDIMI :
-
-    	  if( ( (magnetic_switch ==0 && (HAL_GetTick()-timer)>=4500) && flag_rampa_altitude ==1) || ((HAL_GetTick()-timer)==6500) )
-    	  {
-    		  flag_kontrol_5x++;
-    	  }
-    	  if(flag_kontrol_5x >=5)
-		  {
-    		  SUSTAINER=AYRILDI;
-    		  flag_kontrol_5x=0;
-		  }
-		  break;
-
-      case AYRILDI :
-
-			HAL_UART_Transmit(&huart6, EGU_motor_atesleme, 5, 1000);
-			HAL_UART_Transmit(&huart6, EGU_motor_atesleme, 5, 1000);
-			HAL_UART_Transmit(&huart6, EGU_motor_atesleme, 5, 1000);
-			HAL_UART_Transmit(&huart6, EGU_motor_atesleme, 5, 1000);
-			HAL_UART_Transmit(&huart6, EGU_motor_atesleme, 5, 1000);
-			SUSTAINER=APOGEE;
-		  break;
-
-      case APOGEE :
-
-    	  if(altitude < altitude_max  && flag_new_barometre_data ==1)
-		  {
-    		  flag_new_barometre_data =0;
-			  flag_kontrol_5x++;
-		  }
-    	  if(flag_kontrol_5x >=5)
-    	  {
-
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
-			flag_kontrol_5x=0;
-			//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_4);
-			SUSTAINER=SUSTAINER_ANA;
-    	  }
-
-
-		  break;
-
-      case SUSTAINER_ANA :
-    	  if(altitude <= 500  && flag_new_barometre_data ==1)
-		  {
-			  flag_new_barometre_data =0;
-			  flag_kontrol_5x++;
-		  }
-    	  if(flag_kontrol_5x >=5)
-		  {
-    		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, SET);
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, RESET);
-			flag_kontrol_5x=0;
-			SUSTAINER=FINISH;
-		  }
-
-		  break;
-
-      case FINISH :
-		  break;
-	}
 
 /*************************************************************************************/
-  //    Flash_buff_fill();
+
+ 	  if(Lsm_Sensor.Accel_X >10 && flag_page==0)
+	  {
+ 		  flag_page=1;
+	  }
+ 	  if(flag_page == 1)
+ 	  {
+		  Flash_buff_fill();
+		  Flash_Write_all();
+ 	  }
+
 
 /*************************************************************************************/
 
@@ -1110,6 +1034,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 	{
 		adc= HAL_ADC_GetValue(&hadc1);
 		flag_adc_cnt = 1;
+
 	}
 }
 
@@ -1317,7 +1242,7 @@ void union_converter(void)
 		 }
 
 		 f2u8_altitude.fVal=altitude_max;
-
+		 	Lora_Tx_Buffer[49]=battery;
 			Lora_Tx_Buffer[69] = f2u8_altitude.array[0];
 			Lora_Tx_Buffer[70] = f2u8_altitude.array[1];
 			Lora_Tx_Buffer[71] = f2u8_altitude.array[2];
@@ -1352,7 +1277,7 @@ void EGU_Buff_Load(void)
 
 void Flash_buff_fill()
 {
-	if( flag_flash_200ms == 1 && flag_flash ==0 /*&& SUSTAINER >=1*/)
+	if( flag_flash_200ms == 1 && flag_flash ==0)
 	  	{
 	  		if(i >= 252) {
 	  			flag_flash=1;
@@ -1401,13 +1326,45 @@ void Flash_buff_fill()
 	  		flash_altitude[i+2] = conv.array[2];
 	  		flash_altitude[i+3] = conv.array[3];
 
-
-
-	  		flag_flash =0;
+	  		flag_flash_200ms =0;
 
 	  		i=i+4;
 
 	  	}
+
+
+
+}
+void Flash_Write_all()
+{
+
+	if(flag_flash == 1)
+	{
+			W25Q_Write(page, 0, 1024, flash_accX);
+			HAL_Delay(200);
+			page=page+4;
+			W25Q_Write(page, 0, 1024, flash_accY);
+			HAL_Delay(200);
+			page=page+4;
+			W25Q_Write(page, 0, 1024, flash_accZ);
+			HAL_Delay(200);
+			page=page+4;
+			W25Q_Write(page, 0,1024, flash_gyroX);
+			HAL_Delay(200);
+			page=page+4;
+			W25Q_Write(page, 0, 1024, flash_gyroY);
+			HAL_Delay(200);
+			page=page+4;
+			W25Q_Write(page, 0,1024, flash_gyroZ);
+			HAL_Delay(200);
+			page=page+4;
+			W25Q_Write(page, 0,1024, flash_altitude);
+			HAL_Delay(200);
+
+
+			flag_flash=2;
+	}
+
 }
 
 int8_t user_i2c_read(uint8_t id, uint8_t reg_addr, uint8_t *data, uint16_t len)
